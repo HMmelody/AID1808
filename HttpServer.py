@@ -9,11 +9,25 @@ from threading import Thread
 # 导入配置文件
 from settings import *
 import re
+import time
 
 # 和webframe通信
-def connect_frame():
+def connect_frame(METHOD,PATH_INFO):
     s = socket()
-    s.connect(frame_address) # 连接框架服务器地址
+    try:
+        s.connect(frame_address) # 连接框架服务器地址
+    except Exception as e:
+        print("Connect error",e)
+        return
+    s.send(METHOD.encode())
+    time.sleep(0.1)
+    s.send(PATH_INFO.encode())
+    response = s.recv(4096).decode()
+    if not response:
+        response = '404'
+    s.close()
+    return response
+
     
 
 # 封装httpserver类
@@ -57,8 +71,7 @@ class HTTPServer(object):
         pattern = r'(?P<METHOD>[A-Z]+)\s+(?P<PATH_INFO>/\S*)'
         try:
             env = re.match(pattern,request_line).groupdict()
-            # print(env)
-
+            print(env)
         except:
             response_headlers = "HTTP/1.1 500 SERVER ERROR\r\n"
             response_headlers += "\r\n"
@@ -66,8 +79,20 @@ class HTTPServer(object):
             response = response_headlers + response_body
             connfd.send(response.encode())
 
-
+        response = connect_frame(**env)
+        if response == '404':
+            response_headlers = "HTTP/1.1 404 Not Found\r\n"
+            response_headlers += "\r\n"
+            response_body = "=====Sorry,not found the page====="
+        else:
+            response_headlers = "HTTP/1.1 200 OK\r\n"
+            response_headlers += "\r\n"
+            response_body = response
+        response = response_headlers + response_body
+        connfd.send(response.encode())
+        connfd.close()
         
+    
 if __name__ == "__main__":
 
     httpd = HTTPServer(ADDR)
